@@ -1,0 +1,24 @@
+Description: Drop tasks irrelevant to the Debian packaging
+ This tasks would force this package to have extra build dependencies, even
+ packages that are not in Debian (mini_portile). But no functionality in them
+ is relevant for the Debian packaging, so we just drop them.
+Author: Antonio Terceiro <terceiro@debian.org>
+Origin: vendor
+Forwarded: not-needed
+Last-Update: 2020-01-24
+---
+This patch header follows DEP-3: http://dep.debian.net/deps/dep3/
+--- a/rakelib/native.rake
++++ b/rakelib/native.rake
+@@ -1,3 +1,4 @@
++__END__
+ # use rake-compiler for building the extension
+ require 'rake/extensiontask'
+ require 'rake/extensioncompiler'
+--- a/rakelib/vendor_sqlite3.rake
++++ b/rakelib/vendor_sqlite3.rake
+@@ -1,3 +1,4 @@
++__END__
+ require "rake/clean"
+ require "rake/extensioncompiler"
+ require "mini_portile"

@@ -1,0 +1,33 @@
+Source: ruby-sqlite3
+Section: ruby
+Priority: optional
+Maintainer: Debian Ruby Team <pkg-ruby-extras-maintainers@lists.alioth.debian.org>
+Uploaders: Dmitry Borodaenko <angdraug@debian.org>
+Build-Depends: debhelper-compat (= 13),
+               gem2deb (>= 1),
+               libsqlite3-dev,
+               rake,
+               ruby-hoe,
+               ruby-minitest,
+               ruby-redcloth
+Standards-Version: 4.5.1
+Vcs-Git: https://salsa.debian.org/ruby-team/ruby-sqlite3.git
+Vcs-Browser: https://salsa.debian.org/ruby-team/ruby-sqlite3
+Homepage: https://github.com/sparklemotion/sqlite3-ruby
+Testsuite: autopkgtest-pkg-ruby
+XS-Ruby-Versions: all
+Rules-Requires-Root: no
+
+Package: ruby-sqlite3
+Architecture: any
+XB-Ruby-Versions: ${ruby:Versions}
+Depends: ${misc:Depends},
+         ${ruby:Depends},
+         ${shlibs:Depends}
+Recommends: sqlite3
+Breaks: schleuder (<< 3.4.1-2~)
+Description: SQLite3 interface for Ruby
+ This module allows Ruby programs to interface with the SQLite3 database
+ engine.
+ .
+ Note that this module is only compatible with SQLite 3.6.16 or newer.

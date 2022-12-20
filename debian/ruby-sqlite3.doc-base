@@ -1,0 +1,11 @@
+Document: ruby-sqlite3-faq
+Title: SQLite3/Ruby Frequently Asked Questions
+Author: Jamis Buck
+Abstract: This document provides answers to frequently asked questions about
+ the usage of the interface between Ruby and SQLite3 database engine
+ provided by the ruby-sqlite3 package.
+Section: Programming/Ruby
+
+Format: HTML
+Index: /usr/share/doc/ruby-sqlite3/faq.html
+Files: /usr/share/doc/ruby-sqlite3/faq.html

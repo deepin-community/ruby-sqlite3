@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+export GEM2DEB_TEST_RUNNER = --check-dependencies
+
+%:
+	dh $@ --buildsystem=ruby --with ruby
+
+override_dh_installdocs:
+	cd faq && ruby faq.rb > faq.html
+	dh_installdocs
+
+override_dh_clean:
+	rm -f faq/faq.html
+	dh_clean
