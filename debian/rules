@@ -1,14 +1,14 @@
 #!/usr/bin/make -f
 
 export GEM2DEB_TEST_RUNNER = --check-dependencies
+export DH_RUBY = --gem-install
+export DH_RUBY_GEM_INSTALL_EXCLUDE = ports/*
 
 %:
 	dh $@ --buildsystem=ruby --with ruby
 
-override_dh_installdocs:
-	cd faq && ruby faq.rb > faq.html
-	dh_installdocs
+execute_before_dh_installdocs:
+	kramdown FAQ.md > FAQ.html
 
-override_dh_clean:
-	rm -f faq/faq.html
-	dh_clean
+execute_after_dh_clean:
+	rm -f FAQ.html 

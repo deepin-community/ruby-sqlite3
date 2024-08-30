@@ -1,0 +1,58 @@
+Description: fix failing tests with sqlite 3.46
+Author: Cédric Boutillier <boutil@debian.org>
+Last-Update: 2024-07-27
+
+--- a/test/test_integration.rb
++++ b/test/test_integration.rb
+@@ -36,9 +36,9 @@
+     @db.transaction do
+       @db.execute "create table no_defaults_test ( a INTEGER default 1, b INTEGER )"
+       data = @db.table_info( "no_defaults_test" )
+-      assert_equal({"name" => "a", "type" => "INTEGER", "dflt_value" => "1", "notnull" => 0, "cid" => 0, "pk" => 0},
++      assert_equal({"name" => "a", "type" => "integer", "dflt_value" => "1", "notnull" => 0, "cid" => 0, "pk" => 0},
+         data[0])
+-      assert_equal({"name" => "b", "type" => "INTEGER", "dflt_value" => nil, "notnull" => 0, "cid" => 1, "pk" => 0},
++      assert_equal({"name" => "b", "type" => "integer", "dflt_value" => nil, "notnull" => 0, "cid" => 1, "pk" => 0},
+         data[1])
+     end
+   end
+--- a/test/test_integration_resultset.rb
++++ b/test/test_integration_resultset.rb
+@@ -118,7 +118,7 @@
+   end
+ 
+   def test_types
+-    assert_equal [ "INTEGER", "TEXT" ], @result.types
++    assert_equal [ "integer", "text" ], @result.types
+   end
+ 
+   def test_columns
+--- a/test/test_database.rb
++++ b/test/test_database.rb
+@@ -344,7 +344,7 @@
+         "name"       => "a",
+         "pk"         => 1,
+         "notnull"    => 0,
+-        "type"       => "INTEGER",
++        "type"       => "integer",
+         "dflt_value" => nil,
+         "cid"        => 0
+       },
+@@ -352,7 +352,7 @@
+         "name"       => "b",
+         "pk"         => 0,
+         "notnull"    => 0,
+-        "type"       => "TEXT",
++        "type"       => "text",
+         "dflt_value" => nil,
+         "cid"        => 1
+       }]
+@@ -604,7 +604,7 @@
+       error = assert_raises SQLite3::SQLException do
+         db.execute('create index index_numbers_nope ON numbers ("nope");')
+       end
+-      assert_includes error.message, "no such column: nope"
++      assert_match(/no such column: "?nope"?/, error.message)
+     end
+ 
+     def test_load_extension_with_nonstring_argument

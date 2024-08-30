@@ -82,7 +82,7 @@ static VALUE threadsafe_p(VALUE UNUSED(klass))
   return INT2NUM(sqlite3_threadsafe());
 }
 
-void init_sqlite3_constants()
+void init_sqlite3_constants(void)
 {
   VALUE mSqlite3Constants;
   VALUE mSqlite3Open;
@@ -127,7 +127,8 @@ void init_sqlite3_constants()
 #endif
 }
 
-void Init_sqlite3_native()
+RUBY_FUNC_EXPORTED
+void Init_sqlite3_native(void)
 {
   /*
    * SQLite3 is a wrapper around the popular database
@@ -158,4 +159,6 @@ void Init_sqlite3_native()
   rb_define_singleton_method(mSqlite3, "threadsafe", threadsafe_p, 0);
   rb_define_const(mSqlite3, "SQLITE_VERSION", rb_str_new2(SQLITE_VERSION));
   rb_define_const(mSqlite3, "SQLITE_VERSION_NUMBER", INT2FIX(SQLITE_VERSION_NUMBER));
+  rb_define_const(mSqlite3, "SQLITE_LOADED_VERSION", rb_str_new2(sqlite3_libversion()));
+
 }

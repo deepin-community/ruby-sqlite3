@@ -1,8 +1,47 @@
-ruby-sqlite3 (1.4.2-deepin1) unstable; urgency=medium
+ruby-sqlite3 (1.6.9-2) unstable; urgency=medium
 
-  * Rebuild
+  * Team upload
+  * Build a HTML version of the FAQ
+  * Drop build-dependency on ruby-redcloth used for the old FAQ
+  * Build-depend on kramdown for markdown to HTML conversion of the FAQ
+  * Exclude files in ports/ in the binary package
+  * Bump Standards-Version to 4.7.0 (no changes needed)
+  * Remove trailing spaces in previous changelog entry
 
- -- Deepin Packages Builder <packages@deepin.org>  Fri, 11 Nov 2022 18:05:06 +0800
+ -- Cédric Boutillier <boutil@debian.org>  Tue, 20 Aug 2024 18:03:46 +0200
+
+ruby-sqlite3 (1.6.9-1) unstable; urgency=medium
+
+  * Team upload
+
+  [ Antonio Terceiro ]
+  * Build-Depends: annotate test dependencies for cross building
+
+  [ Cédric Boutillier ]
+  * New upstream version 1.6.3
+  * rules: use gem install layout
+  * control:
+    + drop X?-Ruby-Versions
+    + bump Standards-Version to 4.6.2 (no changes needed)
+  * Refresh fix-tests-sqlite3_3_37.patch
+  * Skip drop-vendorizing-tasks.patch
+  * Build-depend on ruby-mini-portile2
+  * New upstream version 1.6.9
+  * drop use-slugs-in-faq.diff
+  * Doc files are now Markdown
+  * No more FAQ to build: install the md file
+  * Add patches to build with system libraries and fix tests
+
+ -- Cédric Boutillier <boutil@debian.org>  Sat, 27 Jul 2024 20:01:10 +0200
+
+ruby-sqlite3 (1.4.2-4) unstable; urgency=medium
+
+  * Team upload.
+  * Add patch by László Böszörményi to fix tests with sqlite3 3.37 and onwards
+    (Closes: #1003345). Thanks!
+  * Bump Standards-Version to 4.6.0 (no changes needed)
+
+ -- Cédric Boutillier <boutil@debian.org>  Fri, 21 Jan 2022 14:59:51 +0100
 
 ruby-sqlite3 (1.4.2-3) unstable; urgency=low
 

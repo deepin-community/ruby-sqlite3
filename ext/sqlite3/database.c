@@ -1,6 +1,11 @@
 #include <sqlite3_ruby.h>
 #include <aggregator.h>
 
+#ifdef _MSC_VER
+#pragma warning( push )
+#pragma warning( disable : 4028 )
+#endif
+
 #define REQUIRE_OPEN_DB(_ctxt) \
   if(!_ctxt->db) \
     rb_raise(rb_path2class("SQLite3::Exception"), "cannot use a closed database");
@@ -26,7 +31,7 @@ static char *
 utf16_string_value_ptr(VALUE str)
 {
   StringValue(str);
-  rb_str_buf_cat(str, "\x00", 1L);
+  rb_str_buf_cat(str, "\x00\x00", 2L);
   return RSTRING_PTR(str);
 }
 
@@ -35,18 +40,17 @@ static VALUE sqlite3_rb_close(VALUE self);
 static VALUE rb_sqlite3_open_v2(VALUE self, VALUE file, VALUE mode, VALUE zvfs)
 {
   sqlite3RubyPtr ctx;
-  VALUE flags;
   int status;
 
   Data_Get_Struct(self, sqlite3Ruby, ctx);
 
 #if defined TAINTING_SUPPORT
-#if defined StringValueCStr
+#  if defined StringValueCStr
   StringValuePtr(file);
   rb_check_safe_obj(file);
-#else
+#  else
   Check_SafeStr(file);
-#endif
+#  endif
 #endif
 
       status = sqlite3_open_v2(
@@ -59,6 +63,23 @@ static VALUE rb_sqlite3_open_v2(VALUE self, VALUE file, VALUE mode, VALUE zvfs)
   CHECK(ctx->db, status)
 
   return self;
+}
+
+static VALUE rb_sqlite3_disable_quirk_mode(VALUE self)
+{
+#if defined SQLITE_DBCONFIG_DQS_DDL
+  sqlite3RubyPtr ctx;
+  Data_Get_Struct(self, sqlite3Ruby, ctx);
+
+  if(!ctx->db) return Qfalse;
+
+  sqlite3_db_config(ctx->db, SQLITE_DBCONFIG_DQS_DDL, 0, (void*)0);
+  sqlite3_db_config(ctx->db, SQLITE_DBCONFIG_DQS_DML, 0, (void*)0);
+
+  return Qtrue;
+#else
+  return Qfalse;
+#endif
 }
 
 /* call-seq: db.close
@@ -106,7 +127,7 @@ static VALUE total_changes(VALUE self)
   Data_Get_Struct(self, sqlite3Ruby, ctx);
   REQUIRE_OPEN_DB(ctx);
 
-  return INT2NUM((long)sqlite3_total_changes(ctx->db));
+  return INT2NUM(sqlite3_total_changes(ctx->db));
 }
 
 static void tracefunc(void * data, const char *sql)
@@ -147,7 +168,7 @@ static int rb_sqlite3_busy_handler(void * ctx, int count)
 {
   VALUE self = (VALUE)(ctx);
   VALUE handle = rb_iv_get(self, "@busy_handler");
-  VALUE result = rb_funcall(handle, rb_intern("call"), 1, INT2NUM((long)count));
+  VALUE result = rb_funcall(handle, rb_intern("call"), 1, INT2NUM(count));
 
   if(Qfalse == result) return 0;
 
@@ -392,7 +413,7 @@ static VALUE errcode_(VALUE self)
   Data_Get_Struct(self, sqlite3Ruby, ctx);
   REQUIRE_OPEN_DB(ctx);
 
-  return INT2NUM((long)sqlite3_errcode(ctx->db));
+  return INT2NUM(sqlite3_errcode(ctx->db));
 }
 
 /* call-seq: complete?(sql)
@@ -582,7 +603,7 @@ static VALUE load_extension(VALUE self, VALUE file)
   Data_Get_Struct(self, sqlite3Ruby, ctx);
   REQUIRE_OPEN_DB(ctx);
 
-  status = sqlite3_load_extension(ctx->db, RSTRING_PTR(file), 0, &errMsg);
+  status = sqlite3_load_extension(ctx->db, StringValuePtr(file), 0, &errMsg);
   if (status != SQLITE_OK)
   {
     errexp = rb_exc_new2(rb_eRuntimeError, errMsg);
@@ -705,7 +726,7 @@ static int regular_callback_function(VALUE callback_ary, int count, char **data,
 
 /* Is invoked by calling db.execute_batch2(sql, &block)
  *
- * Executes all statments in a given string separated by semicolons.
+ * Executes all statements in a given string separated by semicolons.
  * If a query is made, all values returned are strings
  * (except for 'NULL' values which return nil),
  * so the user may parse values with a block.
@@ -723,9 +744,9 @@ static VALUE exec_batch(VALUE self, VALUE sql, VALUE results_as_hash)
   REQUIRE_OPEN_DB(ctx);
 
   if(results_as_hash == Qtrue) {
-    status = sqlite3_exec(ctx->db, StringValuePtr(sql), hash_callback_function, callback_ary, &errMsg);
+    status = sqlite3_exec(ctx->db, StringValuePtr(sql), (sqlite3_callback)hash_callback_function, (void*)callback_ary, &errMsg);
   } else {
-    status = sqlite3_exec(ctx->db, StringValuePtr(sql), regular_callback_function, callback_ary, &errMsg);
+    status = sqlite3_exec(ctx->db, StringValuePtr(sql), (sqlite3_callback)regular_callback_function, (void*)callback_ary, &errMsg);
   }
 
   if (status != SQLITE_OK)
@@ -779,7 +800,7 @@ static VALUE rb_sqlite3_open16(VALUE self, VALUE file)
   return INT2NUM(status);
 }
 
-void init_sqlite3_database()
+void init_sqlite3_database(void)
 {
 #if 0
   VALUE mSqlite3 = rb_define_module("SQLite3");
@@ -800,6 +821,7 @@ void init_sqlite3_database()
   /* public "define_aggregator" is now a shim around define_aggregator2
    * implemented in Ruby */
   rb_define_private_method(cSqlite3Database, "define_aggregator2", rb_sqlite3_define_aggregator2, 2);
+  rb_define_private_method(cSqlite3Database, "disable_quirk_mode", rb_sqlite3_disable_quirk_mode, 0);
   rb_define_method(cSqlite3Database, "interrupt", interrupt, 0);
   rb_define_method(cSqlite3Database, "errmsg", errmsg, 0);
   rb_define_method(cSqlite3Database, "errcode", errcode_, 0);
@@ -825,3 +847,7 @@ void init_sqlite3_database()
 
   rb_sqlite3_aggregator_init();
 }
+
+#ifdef _MSC_VER
+#pragma warning( pop )
+#endif

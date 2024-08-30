@@ -1,0 +1,15 @@
+Description: force building with system libraries
+Author: Cédric Boutillier <boutil@debian.org>
+Last-Update: 2024-07-27
+
+--- a/ext/sqlite3/extconf.rb
++++ b/ext/sqlite3/extconf.rb
+@@ -9,7 +9,7 @@
+       def configure
+         configure_cross_compiler
+ 
+-        if system_libraries?
++        if true # system_libraries?
+           message "Building sqlite3-ruby using system #{libname}.\n"
+           configure_system_libraries
+         else

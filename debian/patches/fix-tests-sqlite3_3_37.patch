@@ -1,0 +1,78 @@
+Description: SQLite3 3.37.0+ use uppercase column tupe names
+ Starting with SQLite3 3.37.0 it stores column type names as a value and
+ always displayed in uppercase letters.
+ Previously it stored type names as text with the same case as it was given. 
+ This breaks testing where the column type is defined in lowercase and
+ expects it to be given back as-is.
+ Fix this with using type names in uppercase.
+Author: Laszlo Boszormenyi (GCS) <gcs@debian.org>
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1003345
+Bug: https://github.com/sparklemotion/sqlite3-ruby/pull/309
+Forwarded: no
+Last-Update: 2022-01-08
+
+---
+
+--- a/test/test_database.rb
++++ b/test/test_database.rb
+@@ -291,12 +291,12 @@
+ 
+     def test_table_info
+       db = SQLite3::Database.new(':memory:', :results_as_hash => true)
+-      db.execute("create table foo ( a integer primary key, b text )")
++      db.execute("create table foo ( a INTEGER primary key, b TEXT )")
+       info = [{
+         "name"       => "a",
+         "pk"         => 1,
+         "notnull"    => 0,
+-        "type"       => "integer",
++        "type"       => "INTEGER",
+         "dflt_value" => nil,
+         "cid"        => 0
+       },
+@@ -304,7 +304,7 @@
+         "name"       => "b",
+         "pk"         => 0,
+         "notnull"    => 0,
+-        "type"       => "text",
++        "type"       => "TEXT",
+         "dflt_value" => nil,
+         "cid"        => 1
+       }]
+--- a/test/test_integration.rb
++++ b/test/test_integration.rb
+@@ -34,11 +34,11 @@
+ 
+   def test_table_info_without_defaults_for_version_3_3_8_and_higher
+     @db.transaction do
+-      @db.execute "create table no_defaults_test ( a integer default 1, b integer )"
++      @db.execute "create table no_defaults_test ( a INTEGER default 1, b INTEGER )"
+       data = @db.table_info( "no_defaults_test" )
+-      assert_equal({"name" => "a", "type" => "integer", "dflt_value" => "1", "notnull" => 0, "cid" => 0, "pk" => 0},
++      assert_equal({"name" => "a", "type" => "INTEGER", "dflt_value" => "1", "notnull" => 0, "cid" => 0, "pk" => 0},
+         data[0])
+-      assert_equal({"name" => "b", "type" => "integer", "dflt_value" => nil, "notnull" => 0, "cid" => 1, "pk" => 0},
++      assert_equal({"name" => "b", "type" => "INTEGER", "dflt_value" => nil, "notnull" => 0, "cid" => 1, "pk" => 0},
+         data[1])
+     end
+   end
+--- a/test/test_integration_resultset.rb
++++ b/test/test_integration_resultset.rb
+@@ -4,7 +4,7 @@
+   def setup
+     @db = SQLite3::Database.new(":memory:")
+     @db.transaction do
+-      @db.execute "create table foo ( a integer primary key, b text )"
++      @db.execute "create table foo ( a INTEGER primary key, b TEXT )"
+       @db.execute "insert into foo ( b ) values ( 'foo' )"
+       @db.execute "insert into foo ( b ) values ( 'bar' )"
+       @db.execute "insert into foo ( b ) values ( 'baz' )"
+@@ -118,7 +118,7 @@
+   end
+ 
+   def test_types
+-    assert_equal [ "integer", "text" ], @result.types
++    assert_equal [ "INTEGER", "TEXT" ], @result.types
+   end
+ 
+   def test_columns

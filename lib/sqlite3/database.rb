@@ -18,7 +18,7 @@ module SQLite3
   #     end
   #   end
   #
-  # It wraps the lower-level methods provides by the selected driver, and
+  # It wraps the lower-level methods provided by the selected driver, and
   # includes the Pragmas module for access to various pragma convenience
   # methods.
   #
@@ -39,7 +39,22 @@ module SQLite3
 
     class << self
 
-      alias :open :new
+      # Without block works exactly as new.
+      # With block, like new closes the database at the end, but unlike new
+      # returns the result of the block instead of the database instance.
+      def open( *args )
+        database = new(*args)
+
+        if block_given?
+          begin
+            yield database
+          ensure
+            database.close
+          end
+        else
+          database
+        end
+      end
 
       # Quotes the given string, making it safe to use in an SQL statement.
       # It replaces all instances of the single-quote character with two
@@ -56,15 +71,27 @@ module SQLite3
 
     # call-seq: SQLite3::Database.new(file, options = {})
     #
-    # Create a new Database object that opens the given file. If utf16
-    # is +true+, the filename is interpreted as a UTF-16 encoded string.
+    # Create a new Database object that opens the given file.
     #
-    # By default, the new database will return result rows as arrays
-    # (#results_as_hash) and has type translation disabled (#type_translation=).
-
+    # Supported permissions +options+:
+    # - the default mode is <tt>READWRITE | CREATE</tt>
+    # - +:readonly+: boolean (default false), true to set the mode to +READONLY+
+    # - +:readwrite+: boolean (default false), true to set the mode to +READWRITE+
+    # - +:flags+: set the mode to a combination of SQLite3::Constants::Open flags.
+    #
+    # Supported encoding +options+:
+    # - +:utf16+: boolean (default false), is the filename's encoding UTF-16 (only needed if the filename encoding is not UTF_16LE or BE)
+    #
+    # Other supported +options+:
+    # - +:strict+: boolean (default false), disallow the use of double-quoted string literals (see https://www.sqlite.org/quirks.html#double_quoted_string_literals_are_accepted)
+    # - +:results_as_hash+: boolean (default false), return rows as hashes instead of arrays
+    # - +:type_translation+: boolean (default false), enable type translation
+    # - +:default_transaction_mode+: one of +:deferred+ (default), +:immediate+, or +:exclusive+. If a mode is not specified in a call to #transaction, this will be the default transaction mode.
+    #
     def initialize file, options = {}, zvfs = nil
       mode = Constants::Open::READWRITE | Constants::Open::CREATE
 
+      file = file.to_path if file.respond_to? :to_path
       if file.encoding == ::Encoding::UTF_16LE || file.encoding == ::Encoding::UTF_16BE || options[:utf16]
         open16 file
       else
@@ -87,6 +114,10 @@ module SQLite3
         end
 
         open_v2 file.encode("utf-8"), mode, zvfs
+
+        if options[:strict]
+          disable_quirk_mode
+        end
       end
 
       @tracefunc        = nil
@@ -99,6 +130,7 @@ module SQLite3
       @type_translation = options[:type_translation]
       @type_translator  = make_type_translator @type_translation
       @readonly         = mode & Constants::Open::READONLY != 0
+      @default_transaction_mode = options[:default_transaction_mode] || :deferred
 
       if block_given?
         begin
@@ -111,9 +143,7 @@ module SQLite3
 
     def type_translation= value # :nodoc:
       warn(<<-eowarn) if $VERBOSE
-#{caller[0]} is calling SQLite3::Database#type_translation=
-SQLite3::Database#type_translation= is deprecated and will be removed
-in version 2.0.0.
+#{caller[0]} is calling `SQLite3::Database#type_translation=` which is deprecated and will be removed in version 2.0.0.
       eowarn
       @type_translator  = make_type_translator value
       @type_translation = value
@@ -184,9 +214,7 @@ in version 2.0.0.
         end
 
         warn(<<-eowarn) if $VERBOSE
-#{caller[0]} is calling SQLite3::Database#execute with nil or multiple bind params
-without using an array.  Please switch to passing bind parameters as an array.
-Support for bind parameters as *args will be removed in 2.0.0.
+#{caller[0]} is calling `SQLite3::Database#execute` with nil or multiple bind params without using an array.  Please switch to passing bind parameters as an array. Support for bind parameters as *args will be removed in 2.0.0.
         eowarn
       end
 
@@ -237,15 +265,13 @@ Support for bind parameters as *args will be removed in 2.0.0.
     # rows.
     #
     # See also #execute_batch2 for additional ways of
-    # executing statments.
+    # executing statements.
     def execute_batch( sql, bind_vars = [], *args )
       # FIXME: remove this stuff later
       unless [Array, Hash].include?(bind_vars.class)
         bind_vars = [bind_vars]
         warn(<<-eowarn) if $VERBOSE
-#{caller[0]} is calling SQLite3::Database#execute_batch with bind parameters
-that are not a list of a hash.  Please switch to passing bind parameters as an
-array or hash. Support for this behavior will be removed in version 2.0.0.
+#{caller[0]} is calling `SQLite3::Database#execute_batch` with bind parameters that are not a list of a hash.  Please switch to passing bind parameters as an array or hash. Support for this behavior will be removed in version 2.0.0.
         eowarn
       end
 
@@ -258,9 +284,7 @@ array or hash. Support for this behavior will be removed in version 2.0.0.
         end
 
         warn(<<-eowarn) if $VERBOSE
-#{caller[0]} is calling SQLite3::Database#execute_batch with nil or multiple bind params
-without using an array.  Please switch to passing bind parameters as an array.
-Support for this behavior will be removed in version 2.0.0.
+#{caller[0]} is calling `SQLite3::Database#execute_batch` with nil or multiple bind params without using an array.  Please switch to passing bind parameters as an array. Support for this behavior will be removed in version 2.0.0.
         eowarn
       end
 
@@ -294,7 +318,7 @@ Support for this behavior will be removed in version 2.0.0.
     # a block can be passed to parse the values accordingly.
     #
     # See also #execute_batch for additional ways of
-    # executing statments.
+    # executing statements.
     def execute_batch2(sql, &block)
       if block_given?
         result = exec_batch(sql, @results_as_hash)
@@ -307,7 +331,7 @@ Support for this behavior will be removed in version 2.0.0.
     end
 
     # This is a convenience method for creating a statement, binding
-    # paramters to it, and calling execute:
+    # parameters to it, and calling execute:
     #
     #   result = db.query( "select * from foo where a=?", [5])
     #   # is the same as
@@ -327,9 +351,7 @@ Support for this behavior will be removed in version 2.0.0.
         end
 
         warn(<<-eowarn) if $VERBOSE
-#{caller[0]} is calling SQLite3::Database#query with nil or multiple bind params
-without using an array.  Please switch to passing bind parameters as an array.
-Support for this will be removed in version 2.0.0.
+#{caller[0]} is calling `SQLite3::Database#query` with nil or multiple bind params without using an array.  Please switch to passing bind parameters as an array. Support for this will be removed in version 2.0.0.
         eowarn
       end
 
@@ -536,10 +558,10 @@ Support for this will be removed in version 2.0.0.
     #   db.create_aggregate_handler( LengthsAggregateHandler )
     #   puts db.get_first_value( "select lengths(name) from A" )
     def create_aggregate_handler( handler )
-      # This is a compatiblity shim so the (basically pointless) FunctionProxy
+      # This is a compatibility shim so the (basically pointless) FunctionProxy
       # "ctx" object is passed as first argument to both step() and finalize().
       # Now its up to the library user whether he prefers to store his
-      # temporaries as instance varibales or fields in the FunctionProxy.
+      # temporaries as instance variables or fields in the FunctionProxy.
       # The library user still must set the result value with
       # FunctionProxy.result= as there is no backwards compatible way to
       # change this.
@@ -574,7 +596,7 @@ Support for this will be removed in version 2.0.0.
     # The functions arity is the arity of the +step+ method.
     def define_aggregator( name, aggregator )
       # Previously, this has been implemented in C. Now this is just yet
-      # another compatiblity shim
+      # another compatibility shim
       proxy = Class.new do
         @template = aggregator
         @name = name
@@ -612,8 +634,10 @@ Support for this will be removed in version 2.0.0.
     # by SQLite, so attempting to nest a transaction will result in a runtime
     # exception.
     #
-    # The +mode+ parameter may be either <tt>:deferred</tt> (the default),
+    # The +mode+ parameter may be either <tt>:deferred</tt>,
     # <tt>:immediate</tt>, or <tt>:exclusive</tt>.
+    # If `nil` is specified, the default transaction mode, which was
+    # passed to #initialize, is used.
     #
     # If a block is given, the database instance is yielded to it, and the
     # transaction is committed when the block terminates. If the block
@@ -624,7 +648,8 @@ Support for this will be removed in version 2.0.0.
     # If a block is not given, it is the caller's responsibility to end the
     # transaction explicitly, either by calling #commit, or by calling
     # #rollback.
-    def transaction( mode = :deferred )
+    def transaction( mode = nil )
+      mode = @default_transaction_mode if mode.nil?
       execute "begin #{mode.to_s} transaction"
 
       if block_given?
