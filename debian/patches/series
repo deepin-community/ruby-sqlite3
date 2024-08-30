@@ -1,2 +1,5 @@
-use-slugs-in-faq.diff
-drop-vendorizing-tasks.patch
+#use-slugs-in-faq.diff
+#drop-vendorizing-tasks.patch
+fix-tests-sqlite3_3_37.patch
+extconf.patch
+failing_tests_1_6_9.patch

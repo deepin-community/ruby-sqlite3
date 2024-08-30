@@ -11,6 +11,10 @@ module SQLite3
       super
     end
 
+    def teardown
+      @db.close unless @db.closed?
+    end
+
     def test_segv
       assert_raises { SQLite3::Database.new 1 }
     end
@@ -20,7 +24,7 @@ module SQLite3
       assert_equal '', @db.filename('main')
       tf = Tempfile.new 'thing'
       @db = SQLite3::Database.new tf.path
-      assert_equal File.expand_path(tf.path), File.expand_path(@db.filename('main'))
+      assert_equal File.realdirpath(tf.path), File.realdirpath(@db.filename('main'))
     ensure
       tf.unlink if tf
     end
@@ -30,7 +34,7 @@ module SQLite3
       assert_equal '', @db.filename
       tf = Tempfile.new 'thing'
       @db = SQLite3::Database.new tf.path
-      assert_equal File.expand_path(tf.path), File.expand_path(@db.filename)
+      assert_equal File.realdirpath(tf.path), File.realdirpath(@db.filename)
     ensure
       tf.unlink if tf
     end
@@ -40,10 +44,23 @@ module SQLite3
       assert_equal '', @db.filename
       tf = Tempfile.new 'thing'
       @db.execute "ATTACH DATABASE '#{tf.path}' AS 'testing'"
-      assert_equal File.expand_path(tf.path), File.expand_path(@db.filename('testing'))
+
+      assert_equal File.realdirpath(tf.path), File.realdirpath(@db.filename('testing'))
     ensure
       tf.unlink if tf
     end
+
+
+    def test_filename_to_path
+      tf = Tempfile.new 'thing'
+      pn = Pathname tf.path
+      db = SQLite3::Database.new pn
+      assert_equal pn.realdirpath.to_s, File.realdirpath(db.filename)
+    ensure
+      tf.close! if tf
+      db.close if db
+    end
+
 
     def test_error_code
       begin
@@ -84,15 +101,20 @@ module SQLite3
 
     def test_get_first_row_with_type_translation_and_hash_results
       @db.results_as_hash = true
-      @db.type_translation = true
-      assert_equal({"1"=>1}, @db.get_first_row('SELECT 1'))
+      capture_io do # hush translation deprecation warnings
+        @db.type_translation = true
+        assert_equal({"1"=>1}, @db.get_first_row('SELECT 1'))
+      end
     end
 
     def test_execute_with_type_translation_and_hash
-      @db.results_as_hash = true
-      @db.type_translation = true
       rows = []
-      @db.execute('SELECT 1') { |row| rows << row }
+      @db.results_as_hash = true
+
+      capture_io do # hush translation deprecation warnings
+        @db.type_translation = true
+        @db.execute('SELECT 1') { |row| rows << row }
+      end
 
       assert_equal({"1"=>1}, rows.first)
     end
@@ -176,12 +198,36 @@ module SQLite3
 
     def test_new
       db = SQLite3::Database.new(':memory:')
-      assert db
+      assert_instance_of(SQLite3::Database, db)
+    ensure
+      db.close if db
+    end
+
+    def test_open
+      db = SQLite3::Database.open(':memory:')
+      assert_instance_of(SQLite3::Database, db)
+    ensure
+      db.close if db
+    end
+
+    def test_open_returns_block_result
+      result = SQLite3::Database.open(':memory:') do |db|
+        :foo
+      end
+      assert_equal :foo, result
     end
 
     def test_new_yields_self
       thing = nil
       SQLite3::Database.new(':memory:') do |db|
+        thing = db
+      end
+      assert_instance_of(SQLite3::Database, thing)
+    end
+
+    def test_open_yields_self
+      thing = nil
+      SQLite3::Database.open(':memory:') do |db|
         thing = db
       end
       assert_instance_of(SQLite3::Database, thing)
@@ -197,7 +243,9 @@ module SQLite3
         db = SQLite3::Database.new(Iconv.conv(utf16, 'UTF-8', ':memory:'),
                                    :utf16 => true)
       end
-      assert db
+      assert_instance_of(SQLite3::Database, db)
+    ensure
+      db.close if db
     end
 
     def test_close
@@ -209,6 +257,15 @@ module SQLite3
     def test_block_closes_self
       thing = nil
       SQLite3::Database.new(':memory:') do |db|
+        thing = db
+        assert !thing.closed?
+      end
+      assert thing.closed?
+    end
+
+    def test_open_with_block_closes_self
+      thing = nil
+      SQLite3::Database.open(':memory:') do |db|
         thing = db
         assert !thing.closed?
       end
@@ -227,10 +284,24 @@ module SQLite3
       assert thing.closed?
     end
 
+    def test_open_with_block_closes_self_even_raised
+      thing = nil
+      begin
+        SQLite3::Database.open(':memory:') do |db|
+          thing = db
+          raise
+        end
+      rescue
+      end
+      assert thing.closed?
+    end
+
     def test_prepare
       db = SQLite3::Database.new(':memory:')
       stmt = db.prepare('select "hello world"')
       assert_instance_of(SQLite3::Statement, stmt)
+    ensure
+      stmt.close if stmt
     end
 
     def test_block_prepare_does_not_double_close
@@ -349,7 +420,10 @@ module SQLite3
         nil
       end
       @db.execute("select hello(2.2, 'foo', NULL)")
-      assert_equal [2.2, 'foo', nil], called_with
+
+      assert_in_delta(2.2, called_with[0], 0.0001)
+      assert_equal("foo", called_with[1])
+      assert_nil(called_with[2])
     end
 
     def test_define_varargs
@@ -359,7 +433,10 @@ module SQLite3
         nil
       end
       @db.execute("select hello(2.2, 'foo', NULL)")
-      assert_equal [2.2, 'foo', nil], called_with
+
+      assert_in_delta(2.2, called_with[0], 0.0001)
+      assert_equal("foo", called_with[1])
+      assert_nil(called_with[2])
     end
 
     def test_call_func_blob
@@ -441,15 +518,19 @@ module SQLite3
     end
 
     def test_authorizer_ok
+      statements = []
+
       @db.authorizer = Class.new {
         def call action, a, b, c, d; true end
       }.new
-      @db.prepare("select 'fooooo'")
+      statements << @db.prepare("select 'fooooo'")
 
       @db.authorizer = Class.new {
         def call action, a, b, c, d; 0 end
       }.new
-      @db.prepare("select 'fooooo'")
+      statements << @db.prepare("select 'fooooo'")
+    ensure
+      statements.each(&:close)
     end
 
     def test_authorizer_ignore
@@ -458,6 +539,8 @@ module SQLite3
       }.new
       stmt = @db.prepare("select 'fooooo'")
       assert_nil stmt.step
+    ensure
+      stmt.close if stmt
     end
 
     def test_authorizer_fail
@@ -478,14 +561,18 @@ module SQLite3
       end
 
       @db.authorizer = nil
-      @db.prepare("select 'fooooo'")
+      s = @db.prepare("select 'fooooo'")
+    ensure
+      s.close if s
     end
 
     def test_close_with_open_statements
-      @db.prepare("select 'foo'")
+      s = @db.prepare("select 'foo'")
       assert_raises(SQLite3::BusyException) do
         @db.close
       end
+    ensure
+      s.close if s
     end
 
     def test_execute_with_empty_bind_params
@@ -493,11 +580,89 @@ module SQLite3
     end
 
     def test_query_with_named_bind_params
-      assert_equal [['foo']], @db.query("select :n", {'n' => 'foo'}).to_a
+      resultset = @db.query("select :n", {'n' => 'foo'})
+      assert_equal [['foo']], resultset.to_a
+    ensure
+      resultset.close if resultset
     end
 
     def test_execute_with_named_bind_params
       assert_equal [['foo']], @db.execute("select :n", {'n' => 'foo'})
+    end
+
+    def test_strict_mode
+      unless Gem::Requirement.new(">= 3.29.0").satisfied_by?(Gem::Version.new(SQLite3::SQLITE_VERSION))
+        skip("strict mode feature not available in #{SQLite3::SQLITE_VERSION}")
+      end
+
+      db = SQLite3::Database.new(':memory:')
+      db.execute('create table numbers (val int);')
+      db.execute('create index index_numbers_nope ON numbers ("nope");') # nothing raised
+
+      db = SQLite3::Database.new(':memory:', :strict => true)
+      db.execute('create table numbers (val int);')
+      error = assert_raises SQLite3::SQLException do
+        db.execute('create index index_numbers_nope ON numbers ("nope");')
+      end
+      assert_includes error.message, "no such column: nope"
+    end
+
+    def test_load_extension_with_nonstring_argument
+      db = SQLite3::Database.new(':memory:')
+      skip("extensions are not enabled") unless db.respond_to?(:load_extension)
+      assert_raises(TypeError) { db.load_extension(1) }
+      assert_raises(TypeError) { db.load_extension(Pathname.new("foo.so")) }
+    end
+
+    def test_raw_float_infinity
+      # https://github.com/sparklemotion/sqlite3-ruby/issues/396
+      skip if SQLite3::SQLITE_LOADED_VERSION >= "3.43.0"
+
+      db = SQLite3::Database.new ":memory:"
+      db.execute("create table foo (temperature float)")
+      db.execute("insert into foo values (?)", 37.5)
+      db.execute("insert into foo values (?)", Float::INFINITY)
+      assert_equal Float::INFINITY, db.execute("select avg(temperature) from foo").first.first
+    end
+
+    def test_default_transaction_mode
+      tf = Tempfile.new 'database_default_transaction_mode'
+      SQLite3::Database.new(tf.path) do |db|
+        db.execute("create table foo (score int)")
+        db.execute("insert into foo values (?)", 1)
+      end
+
+      test_cases = [
+        {mode: nil, read: true, write: true},
+        {mode: :deferred, read: true, write: true},
+        {mode: :immediate, read: true, write: false},
+        {mode: :exclusive, read: false, write: false},
+      ]
+
+      test_cases.each do |item|
+        db = SQLite3::Database.new tf.path, default_transaction_mode: item[:mode]
+        db2 = SQLite3::Database.new tf.path
+        db.transaction do
+          sql_for_read_test = "select * from foo"
+          if item[:read]
+            assert_nothing_raised{ db2.execute(sql_for_read_test) }
+          else
+            assert_raises(SQLite3::BusyException){ db2.execute(sql_for_read_test) }
+          end
+
+          sql_for_write_test = "insert into foo values (2)"
+          if item[:write]
+            assert_nothing_raised{ db2.execute(sql_for_write_test) }
+          else
+            assert_raises(SQLite3::BusyException){ db2.execute(sql_for_write_test) }
+          end
+        end
+      ensure
+        db.close if db && !db.closed?
+        db2.close if db2 && !db2.closed?
+      end
+    ensure
+      tf.unlink if tf
     end
   end
 end

@@ -11,7 +11,7 @@ module SQLite3
 
     # Returns +true+ or +false+ depending on the value of the named pragma.
     def get_boolean_pragma( name )
-      get_first_value( "PRAGMA #{name}" ) != "0"
+      get_first_value( "PRAGMA #{name}" ) != 0
     end
 
     # Sets the given pragma to the given boolean value. The value itself
@@ -42,11 +42,11 @@ module SQLite3
     # Requests the given pragma (and parameters), and if the block is given,
     # each row of the result set will be yielded to it. Otherwise, the results
     # are returned as an array.
-    def get_query_pragma( name, *parms, &block ) # :yields: row
-      if parms.empty?
+    def get_query_pragma( name, *params, &block ) # :yields: row
+      if params.empty?
         execute( "PRAGMA #{name}", &block )
       else
-        args = "'" + parms.join("','") + "'"
+        args = "'" + params.join("','") + "'"
         execute( "PRAGMA #{name}( #{args} )", &block )
       end
     end
@@ -260,7 +260,7 @@ module SQLite3
     def full_column_names=( mode )
       set_boolean_pragma "full_column_names", mode
     end
-  
+
     def fullfsync
       get_boolean_pragma "fullfsync"
     end
@@ -356,7 +356,7 @@ module SQLite3
     def parser_trace=( mode )
       set_boolean_pragma "parser_trace", mode
     end
-  
+
     def query_only
       get_boolean_pragma "query_only"
     end
@@ -542,6 +542,13 @@ module SQLite3
         end
 
         tweak_default(new_row) if needs_tweak_default
+
+        # Ensure the type value is downcased.  On Mac and Windows
+        # platforms this value is now being returned as all upper
+        # case.
+        if new_row['type']
+          new_row['type'] = new_row['type'].downcase
+        end
 
         if block_given?
           yield new_row

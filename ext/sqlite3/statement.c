@@ -290,7 +290,7 @@ static VALUE bind_param(VALUE self, VALUE key, VALUE value)
 /* call-seq: stmt.reset!
  *
  * Resets the statement. This is typically done internally, though it might
- * occassionally be necessary to manually reset the statement.
+ * occasionally be necessary to manually reset the statement.
  */
 static VALUE reset_bang(VALUE self)
 {
@@ -309,7 +309,7 @@ static VALUE reset_bang(VALUE self)
 /* call-seq: stmt.clear_bindings!
  *
  * Resets the statement. This is typically done internally, though it might
- * occassionally be necessary to manually reset the statement.
+ * occasionally be necessary to manually reset the statement.
  */
 static VALUE clear_bindings_bang(VALUE self)
 {
@@ -348,7 +348,7 @@ static VALUE column_count(VALUE self)
   Data_Get_Struct(self, sqlite3StmtRuby, ctx);
   REQUIRE_OPEN_STMT(ctx);
 
-  return INT2NUM((long)sqlite3_column_count(ctx->st));
+  return INT2NUM(sqlite3_column_count(ctx->st));
 }
 
 /* call-seq: stmt.column_name(index)
@@ -397,7 +397,7 @@ static VALUE bind_parameter_count(VALUE self)
   Data_Get_Struct(self, sqlite3StmtRuby, ctx);
   REQUIRE_OPEN_STMT(ctx);
 
-  return INT2NUM((long)sqlite3_bind_parameter_count(ctx->st));
+  return INT2NUM(sqlite3_bind_parameter_count(ctx->st));
 }
 
 #ifdef HAVE_SQLITE3_COLUMN_DATABASE_NAME
@@ -418,7 +418,7 @@ static VALUE database_name(VALUE self, VALUE index)
 
 #endif
 
-void init_sqlite3_statement()
+void init_sqlite3_statement(void)
 {
   cSqlite3Statement = rb_define_class_under(mSqlite3, "Statement", rb_cObject);
 

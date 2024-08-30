@@ -7,6 +7,11 @@ module SQLite3
       @stmt = SQLite3::Statement.new(@db, "select 'foo'")
     end
 
+    def teardown
+      @stmt.close if !@stmt.closed?
+      @db.close
+    end
+
     def test_double_close_does_not_segv
       @db.execute 'CREATE TABLE "things" ("number" float NOT NULL)'
 
@@ -35,6 +40,8 @@ module SQLite3
       # Older versions of SQLite return:
       #   column *column_name* is not unique
       assert_match(/(column(s)? .* (is|are) not unique|UNIQUE constraint failed: .*)/, exception.message)
+
+      stmt.close
     end
 
     ###
@@ -46,6 +53,7 @@ module SQLite3
       if stmt.respond_to?(:database_name)
         assert_equal 'main', stmt.database_name(0)
       end
+      stmt.close
     end
 
     def test_prepare_blob
@@ -77,6 +85,7 @@ module SQLite3
     def test_new_with_remainder
       stmt = SQLite3::Statement.new(@db, "select 'foo';bar")
       assert_equal 'bar', stmt.remainder
+      stmt.close
     end
 
     def test_empty_remainder
@@ -101,6 +110,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal ['hello'], result
+      stmt.close
     end
 
     def test_bind_param_int
@@ -109,6 +119,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal [10], result
+      stmt.close
     end
 
     def test_bind_nil
@@ -117,6 +128,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal [nil], result
+      stmt.close
     end
 
     def test_bind_blob
@@ -125,9 +137,12 @@ module SQLite3
       stmt.bind_param(1, SQLite3::Blob.new('hello'))
       stmt.execute
       row = @db.execute('select * from foo')
+      stmt.close
 
       assert_equal ['hello'], row.first
-      assert_equal row.first.types, ['BLOB']
+      capture_io do # hush deprecation warning
+        assert_equal ['blob'], row.first.types
+      end
     end
 
     def test_bind_64
@@ -136,6 +151,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal [2 ** 31], result
+      stmt.close
     end
 
     def test_bind_double
@@ -144,6 +160,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal [2.2], result
+      stmt.close
     end
 
     def test_named_bind
@@ -152,6 +169,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal ['hello'], result
+      stmt.close
     end
 
     def test_named_bind_no_colon
@@ -160,6 +178,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal ['hello'], result
+      stmt.close
     end
 
     def test_named_bind_symbol
@@ -168,6 +187,7 @@ module SQLite3
       result = nil
       stmt.each { |x| result = x }
       assert_equal ['hello'], result
+      stmt.close
     end
 
     def test_named_bind_not_found
@@ -175,6 +195,7 @@ module SQLite3
       assert_raises(SQLite3::Exception) do
         stmt.bind_param('bar', 'hello')
       end
+      stmt.close
     end
 
     def test_each
@@ -225,16 +246,19 @@ module SQLite3
     def test_bind_parameter_count
       stmt = SQLite3::Statement.new(@db, "select ?, ?, ?")
       assert_equal 3, stmt.bind_parameter_count
+      stmt.close
     end
 
     def test_execute_with_varargs
       stmt = @db.prepare('select ?, ?')
       assert_equal [[nil, nil]], stmt.execute(nil, nil).to_a
+      stmt.close
     end
 
     def test_execute_with_hash
       stmt = @db.prepare('select :n, :h')
       assert_equal [[10, nil]], stmt.execute('n' => 10, 'h' => nil).to_a
+      stmt.close
     end
 
     def test_with_error
@@ -244,6 +268,7 @@ module SQLite3
       stmt.execute('employee-1') rescue SQLite3::ConstraintException
       stmt.reset!
       assert stmt.execute('employee-2')
+      stmt.close
     end
 
     def test_clear_bindings!
@@ -258,6 +283,8 @@ module SQLite3
       while x = stmt.step
         assert_equal [nil, nil], x
       end
+
+      stmt.close
     end
   end
 end
